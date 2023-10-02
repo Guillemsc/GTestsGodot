@@ -1,0 +1,36 @@
+[gd_scene load_steps=2 format=3 uid="uid://cisvvhtkdystf"]
+
+[ext_resource type="Script" path="res://addons/GTestsGodot/Scripts/EditorWidget/TestRunnerDock.cs" id="1"]
+
+[node name="NUnit Runner" type="VBoxContainer" node_paths=PackedStringArray("RefreshButton", "RunButton", "ResultTree", "TestOutputLabel")]
+script = ExtResource("1")
+RefreshButton = NodePath("HBoxContainer/RefreshButton")
+RunButton = NodePath("HBoxContainer/RunButton")
+ResultTree = NodePath("VSplitContainer/ResultTree")
+TestOutputLabel = NodePath("VSplitContainer/TestOutputLabel")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="RefreshButton" type="Button" parent="HBoxContainer"]
+layout_mode = 2
+text = "Refresh"
+
+[node name="RunButton" type="Button" parent="HBoxContainer"]
+layout_mode = 2
+text = "Run"
+
+[node name="VSplitContainer" type="VSplitContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="ResultTree" type="Tree" parent="VSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TestOutputLabel" type="RichTextLabel" parent="VSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
