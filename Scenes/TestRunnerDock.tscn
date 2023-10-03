@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://cisvvhtkdystf"]
+[gd_scene load_steps=3 format=3 uid="uid://cisvvhtkdystf"]
 
 [ext_resource type="Script" path="res://addons/GTestsGodot/Scripts/EditorWidget/TestRunnerDock.cs" id="1"]
+[ext_resource type="Texture2D" uid="uid://c0jubiu01hlus" path="res://addons/GTestsGodot/Textures/GTestsGodot-Dot.png" id="2_00e15"]
 
 [node name="NUnit Runner" type="VBoxContainer" node_paths=PackedStringArray("RefreshButton", "RunButton", "ResultTree", "TestOutputLabel")]
 script = ExtResource("1")
@@ -8,16 +9,19 @@ RefreshButton = NodePath("HBoxContainer/RefreshButton")
 RunButton = NodePath("HBoxContainer/RunButton")
 ResultTree = NodePath("VSplitContainer/ResultTree")
 TestOutputLabel = NodePath("VSplitContainer/TestOutputLabel")
+DotTexture = ExtResource("2_00e15")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="."]
 layout_mode = 2
 
 [node name="RefreshButton" type="Button" parent="HBoxContainer"]
 layout_mode = 2
+disabled = true
 text = "Refresh"
 
 [node name="RunButton" type="Button" parent="HBoxContainer"]
 layout_mode = 2
+disabled = true
 text = "Run"
 
 [node name="VSplitContainer" type="VSplitContainer" parent="."]

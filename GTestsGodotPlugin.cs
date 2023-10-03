@@ -28,7 +28,7 @@ public partial class GTestsGodotPlugin : EditorPlugin
 		
 		RemoveControlFromDocks(_dock);
 		
-		_dock?.Free();
+		_dock.Free();
 	}
 }
 

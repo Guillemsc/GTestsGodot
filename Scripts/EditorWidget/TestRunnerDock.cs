@@ -1,15 +1,13 @@
 #if TOOLS
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using Godot;
 using GTestsGodot.Enums;
 using GTestsGodot.Filters;
 using GTestsGodot.Listeners;
-using NUnit.Framework.Api;
+using GTestsGodot.Runners;
 using NUnit.Framework.Interfaces;
 
 namespace GTestsGodot.EditorWidget
@@ -21,15 +19,15 @@ namespace GTestsGodot.EditorWidget
         [Export] public Button RunButton;
         [Export] public Tree ResultTree;
         [Export] public RichTextLabel TestOutputLabel;
+        [Export] public Texture2D DotTexture;
         
         readonly Dictionary<ITest, TreeItem> _testTreeItems = new();
-        readonly Dictionary<ITest, ITestResult?> _testResults = new();
-        
-        FrameworkController? _nUnitFramework;
 
+        GTestsGodotTestRunner? _gTestsGodotTestRunner;
+        
         public override void _Ready()
         {
-            InitializeNUnitIfNeeded();
+            InitializeTestRunner();
             ConnectEvents();
         }
         
@@ -37,7 +35,7 @@ namespace GTestsGodot.EditorWidget
         {
             base._Process(delta);
 
-            bool enabled = _nUnitFramework != null && !_nUnitFramework!.Runner.IsTestRunning;    
+            bool enabled = _gTestsGodotTestRunner != null && !_gTestsGodotTestRunner!.IsTestsRunning;    
             SetButtonsEnabled(enabled);
         }
 
@@ -49,20 +47,14 @@ namespace GTestsGodot.EditorWidget
             ResultTree.Connect("item_activated", Callable.From(TestResultTree_ItemActivated));
         }
 
-        void InitializeNUnitIfNeeded()
+        void InitializeTestRunner()
         {
-            if (_nUnitFramework != null)
+            if (_gTestsGodotTestRunner != null)
             {
                 return;
             }
-            
-            _nUnitFramework = new FrameworkController(
-                Assembly.GetExecutingAssembly(),
-                "gnur",
-                new Dictionary<string, object>()
-            );
-            
-            _nUnitFramework.LoadTests();
+
+            _gTestsGodotTestRunner = new GTestsGodotTestRunner();
 
             RefreshAvaliableTests();
         }
@@ -75,7 +67,7 @@ namespace GTestsGodot.EditorWidget
         void RunButton_Click()
         {
             RefreshAvaliableTests();
-            StartTestRun(new MatchEverythingTestFilter());
+            StartTestRun(MatchEverythingTestFilter.Instance);
         }
 
         void TestResultTree_ItemSelected()
@@ -111,7 +103,14 @@ namespace GTestsGodot.EditorWidget
             _testTreeItems.Clear();
             ResultTree.Clear();
 
-            CreateTreeItemForTest(_nUnitFramework!.Runner.LoadedTest);
+            bool hasLoadedTests = _gTestsGodotTestRunner!.TryGetTestTree(out ITest? testsTree);
+
+            if (!hasLoadedTests)
+            {
+                return;
+            }
+
+            CreateTreeItemForTest(testsTree!);
 
             foreach (ITest test in _testTreeItems.Keys)
             {
@@ -121,28 +120,14 @@ namespace GTestsGodot.EditorWidget
         
         void StartTestRun(ITestFilter filter)
         {
-            InitializeNUnitIfNeeded();
+            InitializeTestRunner();
             
-            // Mark all of the tests matched by the filter as "not run".
-            ITest[] testsToClear = _testResults
-                .Keys
-                .Where(filter.Pass)
-                .ToArray();
-
-            foreach (ITest test in testsToClear)
-            {
-                _testResults.Remove(test);
-                
-                UpdateTestTreeItem(test);
-            }
-
-            // Whenever a test starts or finishes, update its results and its tree item.
             GTestsGodotTestListener testListener = new(
                 WhenTestStarted,
                 WhenTestFinished
             );
             
-            _nUnitFramework!.Runner.RunAsync(testListener, filter);
+            _gTestsGodotTestRunner!.StartTestRun(filter, UpdateTestTreeItem, testListener);
         }
         
         void WhenTestStarted(ITest test)
@@ -150,7 +135,6 @@ namespace GTestsGodot.EditorWidget
             void Run()
             {
                 CreateTreeItemForTest(test);
-                _testResults[test] = null;
                 UpdateTestTreeItem(test);
             }
             
@@ -161,7 +145,6 @@ namespace GTestsGodot.EditorWidget
         {
             void Run()
             {
-                _testResults[testResult.Test] = testResult;
                 UpdateTestTreeItem(testResult.Test);
             }
             
@@ -178,36 +161,43 @@ namespace GTestsGodot.EditorWidget
         
         void UpdateTestTreeItem(ITest test)
         {
-            TreeItem treeItem = _testTreeItems[test];
-            treeItem.SetText(0, GetTestLabel(test));
+            bool hasTreeItem = _testTreeItems.TryGetValue(test, out TreeItem? treeItem);
+
+            if (!hasTreeItem)
+            {
+                return;
+            }
+            
+            TestState state = GetTestState(test);
+            string label = GetTestLabel(test);
+            Color iconColor = TestStateToIconColor(state);
+            
+            treeItem!.SetText(0, label);
+            treeItem!.SetIconModulate(0, iconColor);
 
             if (test.Parent == null)
             {
                 return;
             }
             
-            // Recursively update all ancestor items
             UpdateTestTreeItem(test.Parent);
         }
 
         string GetTestLabel(ITest test)
         {
-            TestState state = GetTestState(test);
-            string icon = TestStateToIcon(state);
-
             if (!test.IsSuite)
             {
-                return $"{icon} {test.Name}";
+                return $"{test.Name}";
             }
 
-            bool hasTestResults = _testResults.TryGetValue(test, out ITestResult? testResult);
+            bool hasTestResults = _gTestsGodotTestRunner!.TryGetTestResult(test, out ITestResult? testResult);
             
-            if (!hasTestResults || _testResults[test] == null)
+            if (!hasTestResults || testResult == null)
             {
-                return $"{icon} {test.Name} ({test.TestCaseCount} found)";
+                return $"{test.Name} ({test.TestCaseCount} found)";
             }
             
-            return $"{icon} {test.Name} ({testResult!.PassCount} / {test.TestCaseCount} passing)";
+            return $"{test.Name} ({testResult!.PassCount} / {test.TestCaseCount} passing)";
         }
 
         /// <summary>
@@ -239,7 +229,7 @@ namespace GTestsGodot.EditorWidget
                 return worstState;
             }
 
-            bool hasTestResults = _testResults.TryGetValue(test, out ITestResult? testResult);
+            bool hasTestResults = _gTestsGodotTestRunner!.TryGetTestResult(test, out ITestResult? testResult);
 
             // Tests that haven't been run do not have an entry in _testResults.
             if (!hasTestResults)
@@ -264,25 +254,25 @@ namespace GTestsGodot.EditorWidget
                 _ => TestState.Inconclusive
             };
         }
-
-        string TestStateToIcon(TestState state)
+        
+        Color TestStateToIconColor(TestState state)
         {
             return state switch
             {
-                TestState.NotRun => string.Empty,
-                TestState.InProgress => "(...)",
-                TestState.Passed => "\u2714\ufe0f",
-                TestState.Failed => "\u274c",
-                TestState.Warning => "\u26a0\ufe0f",
-                TestState.Inconclusive => "?",
-                _ => "?"
+                TestState.NotRun => new Color(0.8f, 0.8f, 0.8f),
+                TestState.InProgress => new Color(0.8f, 0.8f, 0.8f),
+                TestState.Passed => new Color(0.3f, 1f, 0.3f),
+                TestState.Failed => new Color(1f, 0.3f, 0.3f),
+                TestState.Warning => new Color(0.3f, 0.3f, 0.3f),
+                TestState.Inconclusive => new Color(0.4f, 0.4f, 0.4f),
+                _ => new Color(0.2f, 0.2f, 0.2f)
             };
         }
 
 
         void DisplayTestOutput(ITest test)
         {
-            bool hasTestResults = _testResults.TryGetValue(test, out ITestResult? testResult);
+            bool hasTestResults = _gTestsGodotTestRunner!.TryGetTestResult(test, out ITestResult? testResult);
             
             if (!hasTestResults)
             {
@@ -338,6 +328,10 @@ namespace GTestsGodot.EditorWidget
                 : _testTreeItems[test.Parent];
 
             TreeItem treeItem = ResultTree.CreateItem(parentTreeItem);
+            
+            treeItem.SetIcon(0, DotTexture);
+            treeItem.SetIconMaxWidth(0, 10);
+            
             _testTreeItems[test] = treeItem;
 
             // Create tree items for all child tests

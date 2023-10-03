@@ -1,4 +1,5 @@
 #if TOOLS
+
 using NUnit.Framework.Interfaces;
 
 namespace GTestsGodot.Filters
@@ -34,4 +35,5 @@ namespace GTestsGodot.Filters
         }
     }
 }
+
 #endif
