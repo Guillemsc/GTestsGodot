@@ -67,6 +67,18 @@ public sealed class GTestsGodotTestRunner
         _nUnitFramework.Runner.RunAsync(finalTestListener, filter);
     }
 
+    public void StartTestRun(
+        ITestFilter filter,
+        GTestsGodotTestListener testsListener
+    )
+    {
+        StartTestRun(
+            filter,
+            _ => { },
+            testsListener
+        );
+    }
+
     public bool TryGetTestTree(out ITest? testTree)
     {
         testTree = _nUnitFramework.Runner.LoadedTest;
